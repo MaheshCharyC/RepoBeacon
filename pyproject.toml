@@ -13,7 +13,7 @@ dependencies = []
 repobeacon = "repobeacon.cli:main"
 
 [tool.setuptools.package-data]
-repobeacon = ["rules/*.yaml", "rules/*.toml"]
+repobeacon = ["rules/*.yaml", "rules/*.toml", "templates/*.css"]
 
 [tool.setuptools.packages.find]
 include = ["repobeacon*"]

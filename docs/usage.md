@@ -45,6 +45,8 @@ From the repository root, `python -m repobeacon` supports the same arguments wit
 
 Each scan creates a new directory. The default is `security-report/<UTC timestamp>`. Explicit output directories must not already exist. Seven files are written: `index.html`, `executive-summary.md`, `technical-report.md`, `findings.json`, `findings.sarif`, `coverage.json`, and `scan-manifest.json`.
 
+The HTML report includes an assessment summary, severity counts and distribution chart, category bars, scanner status cards, and findings grouped by severity. Expand a finding to see remediation, package/advisory information, and scanner provenance. Severity colors are paired with text labels: critical is red, high orange, medium amber, low blue, informational purple, and unknown gray. The responsive report embeds its styles and requires no JavaScript, external fonts, or network access; JSON downloads link to the companion files in the report directory.
+
 Exit codes are `0` for completed checks passing policy, `1` for completed checks failing policy, `2` for incomplete scans or invalid configuration, and `130` for user cancellation. Unknown severity fails the finding gate conservatively. A missing scanner never counts as a successful scan. `--fail-on` defaults to `high`.
 
 ## Implemented coverage
