@@ -1,0 +1,31 @@
+rules:
+  - id: repobeacon.python.eval
+    languages: [python]
+    message: Dynamic evaluation can execute untrusted input. Review the input source and use a data parser instead.
+    severity: ERROR
+    pattern: eval(...)
+  - id: repobeacon.python.exec
+    languages: [python]
+    message: Dynamic code execution requires review of all input sources.
+    severity: ERROR
+    pattern: exec(...)
+  - id: repobeacon.python.shell
+    languages: [python]
+    message: Shell execution may permit command injection. Prefer an argument list with shell disabled.
+    severity: WARNING
+    pattern: subprocess.$FUNC(..., shell=True, ...)
+  - id: repobeacon.python.insecure-tls
+    languages: [python]
+    message: TLS certificate verification is disabled. Restore verification using a trusted CA bundle.
+    severity: ERROR
+    pattern: requests.$FUNC(..., verify=False, ...)
+  - id: repobeacon.javascript.eval
+    languages: [javascript, typescript]
+    message: Dynamic evaluation may execute attacker-controlled code. Replace it with an appropriate data parser.
+    severity: ERROR
+    pattern: eval(...)
+  - id: repobeacon.javascript.innerhtml
+    languages: [javascript, typescript]
+    message: HTML assignment requires review for untrusted content. Prefer textContent for text or validated sanitization.
+    severity: WARNING
+    pattern: $ELEMENT.innerHTML = $VALUE

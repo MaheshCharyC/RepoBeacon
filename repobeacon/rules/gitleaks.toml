@@ -1,0 +1,3 @@
+title = "RepoBeacon default secret rules"
+[extend]
+useDefault = true

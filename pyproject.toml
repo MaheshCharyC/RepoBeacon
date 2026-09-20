@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "repobeacon"
+version = "0.1.0"
+description = "Local application security scanner orchestration and unified reporting"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+repobeacon = "repobeacon.cli:main"
+
+[tool.setuptools.package-data]
+repobeacon = ["rules/*.yaml", "rules/*.toml"]
+
+[tool.setuptools.packages.find]
+include = ["repobeacon*"]
