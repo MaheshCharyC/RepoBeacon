@@ -4,7 +4,7 @@ Run `repobeacon scan .` to include CodeQL alongside Semgrep, Gitleaks, and Trivy
 
 ## Installation and verification
 
-For the one-command macOS setup, run `bash setup.sh` from the RepoBeacon checkout. It installs the OS prerequisites below, prepares Python, then runs `repobeacon setup` to install missing scanners, update CodeQL, and verify all four tools before your first scan. Existing Python installations can run `repobeacon setup` directly after installing the package.
+For one-command setup, run `.\setup.cmd` on Windows or `bash setup.sh` on macOS/Linux from the RepoBeacon checkout. The installer detects the platform, installs prerequisites, prepares Python, then runs `repobeacon setup` to install missing scanners, update CodeQL, and verify all four tools before your first scan. Existing Python environments can run `repobeacon setup` directly after installing the package.
 
 Before reading the source snapshot, each CodeQL-enabled scan verifies the existing CLI version, installed language extractors, and corresponding query packs. It checks the latest stable CLI release from `github/codeql-cli-binaries`, then selects its matching platform bundle from `github/codeql-action`. Prereleases and arbitrary download URLs are rejected. The full bundle contains compatible precompiled queries as well as the CLI.
 

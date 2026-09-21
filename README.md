@@ -13,44 +13,79 @@ RepoBeacon runs four security tools on a project folder on your computer. It bri
 
 You don't need to start a server or upload your project to use the default scan. Internet access is needed to download tools, updates, and vulnerability data. AI features are off by default.
 
-## Get started on a Mac
+## Get started
 
-You need a Mac [supported by Homebrew](https://docs.brew.sh/Installation#macos-requirements), an internet connection, several GB of free disk space, and permission to install software. Setup installs missing prerequisites for you. Apple and Homebrew installers may ask for your Mac password or show prompts; follow those prompts to continue.
+You need an internet connection, several GB of free disk space, and permission to install software. Setup checks your operating system, prepares a private Python environment, installs missing tools, updates CodeQL, and verifies all four scanners. Installers may ask for your password or show prompts; follow them to continue.
 
-First, [download RepoBeacon](https://github.com/MaheshCharyC/RepoBeacon/archive/refs/heads/main.zip) and unzip it. Open **Terminal** (press **Command + Space**, type **Terminal**, then press Return). Type `cd ` with a space after it, drag the unzipped RepoBeacon folder into Terminal, and press Return. This tells Terminal which folder to work in.
+First, [download RepoBeacon](https://github.com/MaheshCharyC/RepoBeacon/archive/refs/heads/main.zip) and unzip it. Open a terminal in the unzipped RepoBeacon folder:
 
-### 1. Set up
+- **Windows:** open the folder in File Explorer, click the address bar, type `powershell` or `cmd`, and press Enter.
+- **macOS:** open Terminal, type `cd ` with a space after it, drag the RepoBeacon folder into Terminal, and press Return.
+- **Linux:** right-click the folder and choose **Open in Terminal**, or use `cd /path/to/RepoBeacon`.
 
-Copy this command into Terminal and press Return:
+### 1. Set up with one command
+
+Run the command for your terminal from the RepoBeacon folder.
+
+**Windows — PowerShell or Command Prompt (CMD):**
+
+```powershell
+.\setup.cmd
+```
+
+**macOS (zsh or Bash), Linux, or WSL 2:**
 
 ```sh
 bash setup.sh
 ```
 
-This single command:
+**Git Bash on Windows:** use `bash setup.sh`; it automatically launches the Windows installer.
 
-- Checks Apple command-line tools and starts their installer if needed.
-- Installs Homebrew and Python if missing, plus Rosetta 2 on Apple Silicon when needed by CodeQL.
-- Creates a private Python environment (`.venv`) and installs RepoBeacon inside it.
-- Installs missing Semgrep, Gitleaks, and Trivy, gets the latest stable CodeQL bundle, and verifies all four tools.
+On Windows, `setup.cmd` chooses PowerShell 7 when installed, otherwise Windows PowerShell 5.1, then runs `setup.ps1`. You can also invoke it directly:
 
-Wait for **“Setup complete. All four scanners are ready.”** First-time setup can take a while, especially the CodeQL download. You can rerun the same command after a failed setup; installed tools and a working environment are reused. An old or broken environment is backed up before replacement.
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\setup.ps1
+```
+
+The execution-policy option applies only to this process; setup does not change your machine's policy. Organization policies can still require IT assistance.
+
+**What setup handles:**
+
+| System | Installation method |
+| --- | --- |
+| Windows x64 (Windows 10 1809+ / Windows 11) | Installs WinGet if missing, finds or installs 64-bit Python, installs Semgrep inside `.venv`, and installs Gitleaks and Trivy with WinGet. |
+| macOS | Checks Apple command-line tools and Rosetta where needed; uses Homebrew for Python and missing scanners. |
+| Linux / WSL 2 | Checks for glibc; detects `apt-get` or `dnf` for Homebrew prerequisites when needed, then uses Homebrew for Python and missing scanners. |
+
+All paths install RepoBeacon into `.venv`, install or update the official CodeQL bundle, and verify the tools. Windows PATH changes are picked up during setup without reopening the terminal.
+
+Wait for **“Setup complete. All four scanners are ready.”** First-time downloads can take a while. You can rerun the same command after a failed setup; working tools and environments are reused. An old or broken environment is backed up before replacement.
+
+Supported Unix systems must meet [Homebrew's macOS requirements](https://docs.brew.sh/Installation#macos-requirements) or [Linux requirements](https://docs.brew.sh/Homebrew-on-Linux#requirements). Run setup as your normal user, without `sudo`; installers request it as needed. Other Linux package managers require Homebrew to be installed first. Alpine/musl Linux, Windows ARM64, and 32-bit systems are not supported by the complete setup.
 
 ### 2. Scan your project
+
+**Windows — PowerShell or CMD:**
+
+```powershell
+.\.venv\Scripts\repobeacon.exe scan "C:\path\to\your-project"
+```
+
+**macOS, Linux, or WSL 2:**
 
 ```sh
 .venv/bin/repobeacon scan "/path/to/your-project"
 ```
 
-Replace `/path/to/your-project` with the folder you want to check. Keep the quotes if the path contains spaces. For example:
+**Git Bash on Windows:**
 
 ```sh
-.venv/bin/repobeacon scan "$HOME/Projects/MyApp"
+./.venv/Scripts/repobeacon.exe scan "C:/path/to/your-project"
 ```
 
-Tip: you can type `.venv/bin/repobeacon scan ` and drag your project folder into Terminal, then press Return.
+Replace the quoted path with the folder you want to check. Keep the quotes if the path contains spaces. For example, a Mac project might be `"$HOME/Projects/MyApp"`, and a Windows project might be `"C:\Users\YourName\Projects\MyApp"`.
 
-RepoBeacon detects the code languages automatically. It checks for missing scanners and CodeQL updates before scanning, so the tools stay ready. The first scan may also need to download vulnerability data.
+RepoBeacon detects the code languages automatically. It checks for missing scanners and CodeQL updates before scanning. The first scan may also download vulnerability data.
 
 **Your report opens automatically in your default browser when the scan finishes.**
 
@@ -72,17 +107,20 @@ You also get a short written summary (`executive-summary.md`), a detailed report
 
 ## Next time you use it
 
-Open Terminal in the RepoBeacon folder again and run the scan command from step 2. Setup persists after restarting your Mac. You do **not** need to activate the Python environment or run setup before every scan.
+Open Terminal in the RepoBeacon folder again and run the scan command from step 2. Setup persists after restarting your computer. You do **not** need to activate the Python environment or run setup before every scan.
 
 To check installations without running a scan:
 
-```sh
-.venv/bin/repobeacon doctor
-```
+| System | Command |
+| --- | --- |
+| Windows | `.\.venv\Scripts\repobeacon.exe doctor` |
+| macOS / Linux | `.venv/bin/repobeacon doctor` |
 
-CodeQL is stored in `~/.cache/repobeacon/codeql/`, outside the Python environment. Use `doctor` to check it; a standalone `codeql` command may not be on your Terminal's search path.
+CodeQL is stored in `~/.cache/repobeacon/codeql/` (`%USERPROFILE%\.cache\repobeacon\codeql\` on Windows), outside the Python environment. Use `doctor` to check it; a standalone `codeql` command may not be on your Terminal's search path.
 
 ## A few useful options
+
+The examples below use macOS/Linux paths. On Windows, replace `.venv/bin/repobeacon` with `.\.venv\Scripts\repobeacon.exe` and use your Windows project path.
 
 | What you want to do | Command (run from the RepoBeacon folder) |
 | --- | --- |
@@ -94,14 +132,14 @@ CodeQL is stored in `~/.cache/repobeacon/codeql/`, outside the Python environmen
 
 **Swift, Go, Kotlin, and Rust:** CodeQL analysis for these languages can execute project build code. For a project you trust, add `--codeql-allow-builds` to the scan command. Its language tools and dependencies must also be installed (for example, full Xcode for an iOS project). Setup installs the scanners; it does not install every project's build tools. See [language requirements](docs/codeql.md#language-detection).
 
-**Linux or Windows:** the one-command setup script currently supports macOS. Use the [manual installation guide](docs/usage.md#requirements-and-installation) on other systems.
+For manual installation and additional options, see the [detailed installation guide](docs/usage.md#requirements-and-installation).
 
 ## If something goes wrong
 
-- **Setup stopped:** read the error above it, finish any Apple installer prompts, then run `bash setup.sh` again.
-- **“No such file or directory” for `.venv/bin/repobeacon`:** make sure Terminal is in the RepoBeacon folder and setup has completed.
+- **Setup stopped:** read the error above it, finish any installer prompts, then rerun your setup command from step 1.
+- **The scan command is not found:** make sure your terminal is in the RepoBeacon folder, setup has completed, and you are using the command for your terminal from step 2.
 - **The browser didn't open:** double-click `index.html` at the report path printed in Terminal.
-- **The scan reports an error:** open the report and check the scanner status. Run `.venv/bin/repobeacon doctor` to check the tools. Rerun setup for missing tools or CodeQL repairs; if another installed scanner fails verification, reinstall that tool with Homebrew.
+- **The scan reports an error:** open the report and check the scanner status. Run the `doctor` command for your system from "Next time you use it" above. Rerun setup for missing tools or CodeQL repairs; if another installed scanner fails verification, reinstall it using its package manager. In Windows PowerShell or CMD, reinstall Semgrep with `.\.venv\Scripts\python.exe -m pip install --force-reinstall semgrep`.
 - **A command finishes with a nonzero exit code:** `1` means the scan completed and found issues that fail the severity threshold; `2` means the scan was incomplete or couldn't start. Both need attention.
 
 ## Coverage and more information

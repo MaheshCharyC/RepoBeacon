@@ -4,23 +4,38 @@ set -euo pipefail
 
 trap 'printf "\nSetup stopped. Fix the error above, then run bash setup.sh again.\n" >&2' ERR
 
-if [[ "$(uname -s)" != "Darwin" ]]; then
-    echo "This setup script supports macOS. For Linux/Windows, see docs/usage.md."
-    exit 1
-fi
+repo_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+setup_os="$(uname -s)"
+case "$setup_os" in
+    MINGW*|MSYS*|CYGWIN*)
+        echo "Windows shell detected; continuing with the PowerShell installer."
+        powershell_bin="$(command -v pwsh.exe || command -v powershell.exe)"
+        exec "$powershell_bin" -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$(cygpath -w "$repo_dir/setup.ps1")"
+        ;;
+    Darwin|Linux) ;;
+    *) echo "Unsupported OS: $setup_os. Setup supports macOS, Linux, and Windows."; exit 1 ;;
+esac
 if [[ "$EUID" -eq 0 ]]; then
     echo "Run bash setup.sh as your normal user, without sudo. Installers request permission when needed."
     exit 1
 fi
 
-repo_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 cd "$repo_dir"
 
-echo "RepoBeacon setup: checking your Mac and installing missing tools."
+echo "RepoBeacon setup: detected $setup_os, running in Bash $BASH_VERSION."
 echo "Keep this terminal open. First-time downloads may take a while and need several GB of disk space."
 
-echo "[1/5] Checking Apple command-line tools..."
-if ! xcode-select -p >/dev/null 2>&1; then
+echo "[1/5] Checking OS prerequisites..."
+case "$(uname -m)" in
+    x86_64|amd64|arm64|aarch64) ;;
+    *) echo "The complete scanner stack requires a supported 64-bit Intel or ARM system."; exit 1 ;;
+esac
+if [[ "$setup_os" == "Linux" ]]; then
+    if ! getconf GNU_LIBC_VERSION >/dev/null 2>&1; then
+        echo "CodeQL requires glibc Linux. Alpine/musl systems are not supported by this setup."
+        exit 1
+    fi
+elif ! xcode-select -p >/dev/null 2>&1; then
     xcode-select --install
     while ! xcode-select -p >/dev/null 2>&1; do
         if [[ ! -t 0 ]]; then
@@ -38,12 +53,28 @@ find_brew() {
             echo /opt/homebrew/bin/brew
         elif [[ -x /usr/local/bin/brew ]]; then
             echo /usr/local/bin/brew
+        elif [[ -x /home/linuxbrew/.linuxbrew/bin/brew ]]; then
+            echo /home/linuxbrew/.linuxbrew/bin/brew
+        elif [[ -x "$HOME/.linuxbrew/bin/brew" ]]; then
+            echo "$HOME/.linuxbrew/bin/brew"
         else
             return 1
         fi
     }
 }
 if ! brew_bin="$(find_brew)"; then
+    if [[ "$setup_os" == "Linux" ]]; then
+        echo "Installing Homebrew's Linux prerequisites using the detected package manager..."
+        if command -v apt-get >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y build-essential procps curl file git ca-certificates
+        elif command -v dnf >/dev/null 2>&1; then
+            sudo dnf install -y gcc gcc-c++ make procps-ng curl file git ca-certificates
+        else
+            echo "No supported system package manager found (apt-get or dnf). Install Homebrew manually, then rerun bash setup.sh."
+            exit 1
+        fi
+    fi
     echo "Installing Homebrew from its official installer. Follow its prompts."
     brew_installer="$(mktemp -t repobeacon-homebrew)"
     trap 'rm -f "$brew_installer"' EXIT
@@ -56,7 +87,7 @@ export PATH="$brew_prefix/bin:$brew_prefix/sbin:$PATH"
 "$brew_bin" --version
 
 echo "[3/5] Checking CodeQL platform requirements..."
-if [[ "$(uname -m)" == "arm64" || "$(sysctl -n hw.optional.arm64 2>/dev/null || true)" == "1" ]]; then
+if [[ "$setup_os" == "Darwin" ]] && [[ "$(uname -m)" == "arm64" || "$(sysctl -n hw.optional.arm64 2>/dev/null || true)" == "1" ]]; then
     if ! arch -x86_64 /usr/bin/true >/dev/null 2>&1; then
         echo "Installing Apple's Rosetta 2 for CodeQL. Follow Apple's license prompt."
         sudo softwareupdate --install-rosetta

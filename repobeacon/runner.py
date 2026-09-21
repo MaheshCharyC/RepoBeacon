@@ -31,10 +31,13 @@ def executable(name):
             return managed
     sibling = Path(sys.executable).parent / (name + ".exe" if os.name == "nt" else name)
     found = shutil.which(str(sibling)) or shutil.which(name)
-    if found or sys.platform != "darwin":
+    if found:
         return found
-    for directory in (Path("/opt/homebrew/bin"), Path("/usr/local/bin")):
-        candidate = directory / name
+    directories = [Path("/opt/homebrew/bin"), Path("/usr/local/bin"), Path("/home/linuxbrew/.linuxbrew/bin"), Path.home() / ".linuxbrew/bin"] if sys.platform in {"darwin", "linux"} else []
+    if sys.platform == "win32" and os.environ.get("LOCALAPPDATA"):
+        directories.append(Path(os.environ["LOCALAPPDATA"]) / "Microsoft/WinGet/Links")
+    for directory in directories:
+        candidate = directory / (name + ".exe" if sys.platform == "win32" else name)
         if candidate.is_file() and os.access(candidate, os.X_OK):
             return str(candidate)
     return None
@@ -44,7 +47,7 @@ def homebrew_executable():
     found = shutil.which("brew")
     if found:
         return found
-    for candidate in (Path("/opt/homebrew/bin/brew"), Path("/usr/local/bin/brew")):
+    for candidate in (Path("/opt/homebrew/bin/brew"), Path("/usr/local/bin/brew"), Path("/home/linuxbrew/.linuxbrew/bin/brew"), Path.home() / ".linuxbrew/bin/brew"):
         if candidate.is_file() and os.access(candidate, os.X_OK):
             return str(candidate)
     return None
@@ -55,14 +58,17 @@ def install_missing_scanners(names):
     missing = [name for name in requested if executable(name) is None]
     if not missing:
         return []
-    if sys.platform != "darwin":
+    if sys.platform == "win32":
+        install_windows_scanners(missing)
+        return missing
+    if sys.platform not in {"darwin", "linux"}:
         raise ScannerError(
-            "Missing scanners: " + ", ".join(missing) + ". Automatic installation is currently supported on macOS with Homebrew; install them from their official distribution channels or use --no-install-tools to record them as missing."
+            "Missing scanners: " + ", ".join(missing) + ". Automatic installation supports macOS/Linux with Homebrew and Windows with WinGet."
         )
     brew = homebrew_executable()
     if brew is None:
         raise ScannerError(
-            "Missing scanners: " + ", ".join(missing) + ". Install Homebrew first, or use --no-install-tools to run without automatic installation."
+            "Missing scanners: " + ", ".join(missing) + ". Run bash setup.sh to prepare Homebrew, or use --no-install-tools to run without automatic installation."
         )
     print("Installing missing scanners with Homebrew: " + ", ".join(missing))
     try:
@@ -75,6 +81,45 @@ def install_missing_scanners(names):
     if unresolved:
         raise ScannerError("Homebrew completed, but these scanners are still unavailable: " + ", ".join(unresolved) + ". Check your PATH and Homebrew installation.")
     return missing
+
+
+def refresh_windows_path():
+    # Newly installed WinGet applications must work in this process, without a restart.
+    import winreg
+    paths = [os.environ.get("PATH", "")]
+    for hive, key in ((winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment"), (winreg.HKEY_CURRENT_USER, "Environment")):
+        try:
+            with winreg.OpenKey(hive, key) as entry:
+                paths.append(os.path.expandvars(winreg.QueryValueEx(entry, "Path")[0]))
+        except OSError:
+            pass
+    os.environ["PATH"] = os.pathsep.join(paths)
+
+
+def install_windows_scanners(missing):
+    if "semgrep" in missing and sys.prefix == sys.base_prefix:
+        raise ScannerError("Run setup.cmd first: Semgrep must be installed inside RepoBeacon's private Python environment.")
+    winget = shutil.which("winget")
+    if any(name in missing for name in ("gitleaks", "trivy")) and not winget:
+        raise ScannerError("WinGet is missing. Run setup.cmd to install Windows prerequisites.")
+    commands = []
+    if "semgrep" in missing:
+        commands.append(("Semgrep", [sys.executable, "-m", "pip", "install", "semgrep"]))
+    for name, package in (("gitleaks", "Gitleaks.Gitleaks"), ("trivy", "AquaSecurity.Trivy")):
+        if name in missing:
+            commands.append((name, [winget, "install", "--id", package, "--exact", "--source", "winget", "--scope", "user", "--accept-source-agreements", "--accept-package-agreements"]))
+    for name, command in commands:
+        print(f"Installing {name} on Windows...", flush=True)
+        try:
+            result = subprocess.run(command, check=False)
+        except OSError as error:
+            raise ScannerError(f"Could not start the {name} installer.") from error
+        if result.returncode != 0:
+            raise ScannerError(f"Could not install {name} (exit status {result.returncode}). Review the installer output above and rerun setup.cmd.")
+    refresh_windows_path()
+    unresolved = [name for name in missing if executable(name) is None]
+    if unresolved:
+        raise ScannerError("Installation finished but these scanners are unavailable: " + ", ".join(unresolved) + ". Check the installer output and rerun setup.cmd.")
 
 
 def terminate(process):

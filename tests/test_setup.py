@@ -64,6 +64,12 @@ elif name == "brew":
         shutil.copy2(root / "bin/python-template", target)
 elif name == "arch":
     sys.exit(0 if (root / "rosetta-ready").exists() else 1)
+elif name == "getconf":
+    sys.exit(1 if os.environ.get("SETUP_TEST_NO_GLIBC") else 0)
+elif name == "cygpath":
+    print(args[-1])
+elif name == "pwsh.exe":
+    sys.exit(int(os.environ.get("SETUP_TEST_STATUS", "0")))
 elif name == "sudo":
     assert args == ["softwareupdate", "--install-rosetta"]
     (root / "rosetta-ready").touch()
@@ -79,7 +85,7 @@ elif name in ("python", "python3.12"):
 '''
 
 
-@unittest.skipUnless(os.name == "posix" and os.geteuid() != 0 and shutil.which("bash"), "macOS bootstrap requires Bash and a non-root Unix user")
+@unittest.skipUnless(os.name == "posix" and os.geteuid() != 0 and shutil.which("bash"), "Bash bootstrap checks require a non-root Unix user")
 class BootstrapTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory(prefix="repobeacon setup ")
@@ -92,7 +98,7 @@ class BootstrapTests(unittest.TestCase):
         self.bin.mkdir()
         script = f'#!/bin/sh\nexec {shlex.quote(sys.executable)} {shlex.quote(str(self.root / "fake.py"))} "$0" "$@"\n'
         (self.root / "fake.py").write_text("import sys\nsys.argv = sys.argv[1:]\n" + FAKE_TOOL)
-        for name in ("uname", "xcode-select", "brew", "sysctl", "arch", "sudo", "python-template"):
+        for name in ("uname", "xcode-select", "brew", "sysctl", "arch", "sudo", "getconf", "cygpath", "pwsh.exe", "python-template"):
             (self.bin / name).write_text(script)
             (self.bin / name).chmod(0o755)
         self.env = {**os.environ, "SETUP_TEST_ROOT": str(self.root), "PATH": str(self.bin) + ":/usr/bin:/bin"}
@@ -134,9 +140,29 @@ class BootstrapTests(unittest.TestCase):
         self.assertNotIn("Next, scan", result.stdout)
 
     def test_unsupported_platform_stops_before_installing(self):
-        result, calls = self.run_setup(SETUP_TEST_OS="Linux")
+        result, calls = self.run_setup(SETUP_TEST_OS="FreeBSD")
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual([call[0] for call in calls], ["uname"])
+
+    def test_linux_setup_uses_brew_without_apple_installers(self):
+        result, calls = self.run_setup(SETUP_TEST_OS="Linux")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn(["python", ["-m", "repobeacon", "setup"], str(self.repo)], calls)
+        self.assertFalse(any(call[0] in {"arch", "xcode-select", "sudo"} for call in calls))
+
+    def test_windows_bash_dispatches_and_preserves_exit_status(self):
+        result, calls = self.run_setup(SETUP_TEST_OS="MINGW64_NT-10.0", SETUP_TEST_STATUS="23")
+        self.assertEqual(result.returncode, 23)
+        launches = [call for call in calls if call[0] == "pwsh.exe"]
+        self.assertEqual(len(launches), 1)
+        self.assertEqual(launches[0][1][-2:], ["-File", str(self.repo / "setup.ps1")])
+        self.assertFalse(any(call[0] in {"brew", "xcode-select"} for call in calls))
+
+    def test_musl_linux_stops_before_installing(self):
+        result, calls = self.run_setup(SETUP_TEST_OS="Linux", SETUP_TEST_NO_GLIBC="1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("glibc Linux", result.stdout)
+        self.assertFalse(any(call[0] == "brew" for call in calls))
 
     def test_pending_apple_install_in_noninteractive_session_is_actionable(self):
         result, calls = self.run_setup(SETUP_TEST_NO_CLT="1")
