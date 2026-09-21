@@ -6,6 +6,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+import webbrowser
 from unittest.mock import patch
 
 from repobeacon.adapters import gitleaks_results, sarif_results, semgrep_results, trivy_results
@@ -149,6 +150,9 @@ class CLITests(unittest.TestCase):
         codeql = patch("repobeacon.cli.ensure_codeql", return_value=("/tools/codeql", {"version": "2.27.0", "languages": ["python", "javascript"]}))
         self.ensure_codeql = codeql.start()
         self.addCleanup(codeql.stop)
+        browser = patch("repobeacon.cli.webbrowser.open_new_tab", return_value=True)
+        self.open_browser = browser.start()
+        self.addCleanup(browser.stop)
 
     def call(self, *arguments):
         with redirect_stdout(io.StringIO()):
@@ -166,6 +170,46 @@ class CLITests(unittest.TestCase):
         result = json.loads((output / "findings.json").read_text())
         self.assertEqual(result["policy_result"]["execution_status"], "incomplete")
         self.assertEqual(len(list(output.iterdir())), 7)
+        self.open_browser.assert_called_once_with((output / "index.html").resolve().as_uri())
+
+    def test_opens_final_report_with_encoded_file_url(self):
+        output = self.root / "report with spaces #1"
+        def open_report(url):
+            self.assertEqual(url, (output / "index.html").resolve().as_uri())
+            self.assertIn("%20", url)
+            self.assertIn("%23", url)
+            self.assertTrue((output / "index.html").is_file())
+            self.assertEqual(len(list(output.iterdir())), 7)
+            return True
+        self.open_browser.side_effect = open_report
+        with patch("repobeacon.cli.run_adapter", side_effect=self.fake_adapter):
+            code = self.call("scan", str(self.source), "--scanners", "semgrep", "--output", str(output))
+        self.assertEqual(code, 1)
+        self.open_browser.assert_called_once()
+
+    def test_no_open_preserves_report_without_launching_browser(self):
+        output = self.root / "report"
+        with patch("repobeacon.cli.run_adapter", side_effect=self.fake_adapter):
+            code = self.call("scan", str(self.source), "--scanners", "semgrep", "--no-open", "--output", str(output))
+        self.assertEqual(code, 1)
+        self.assertTrue((output / "index.html").is_file())
+        self.open_browser.assert_not_called()
+
+    def test_browser_failure_preserves_scan_exit_status(self):
+        for index, failure in enumerate((False, OSError("no desktop"), webbrowser.Error("no browser"))):
+            for expected in (0, 1, 2):
+                with self.subTest(failure=failure, expected=expected):
+                    output = self.root / f"report-{index}-{expected}"
+                    self.open_browser.side_effect = failure if isinstance(failure, Exception) else None
+                    self.open_browser.return_value = False
+                    run = {"scanner": "semgrep", "version": "test", "status": "error" if expected == 2 else "success", "required": True}
+                    findings = [finding("semgrep", "rule", "Finding", "high", "sast", "app.py")] if expected == 1 else []
+                    console = io.StringIO()
+                    with patch("repobeacon.cli.run_adapter", return_value=(run, findings)), redirect_stdout(console):
+                        code = main(["scan", str(self.source), "--scanners", "semgrep", "--output", str(output)])
+                    self.assertEqual(code, expected)
+                    self.assertTrue((output / "index.html").is_file())
+                    self.assertIn("Open the report path above manually", console.getvalue())
 
     def test_scan_checks_selected_scanners_before_scanning(self):
         output = self.root / "report"
@@ -202,6 +246,7 @@ class CLITests(unittest.TestCase):
         self.assertEqual((output / "keep.txt").read_text(), "original")
         self.install_missing_scanners.assert_not_called()
         self.ensure_codeql.assert_not_called()
+        self.open_browser.assert_not_called()
 
     def test_html_escapes_untrusted_findings(self):
         output = self.root / "report"

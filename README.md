@@ -1,95 +1,116 @@
 # RepoBeacon
 
-One command. Unified application security insight.
+**Check a project for security issues and get one easy-to-read report.**
 
-RepoBeacon is an application security CLI that coordinates established scanners and produces unified executive and engineering reports. It integrates Semgrep, Gitleaks, Trivy, and CodeQL for SAST, secrets, dependencies, infrastructure configuration, and container images.
+RepoBeacon runs four security tools on a project folder on your computer. It brings their results together so you can see what needs attention, where the issue is, and suggested ways to fix it.
 
-## Project status
-
-Version 0.1.0 is a working Python implementation with no runtime Python dependencies. It creates an isolated source snapshot, runs external scanner binaries, normalizes findings, applies thresholds and baselines, and writes HTML, Markdown, JSON, and SARIF. AI enrichment is optional through a documented HTTP protocol.
-
-Start with the [runnable usage guide](docs/usage.md). The original design documents describe the broader roadmap and include features not yet implemented. The bundled SAST rules are a small starter pack, not comprehensive language coverage.
-
-The default stack is Semgrep Community Edition, Gitleaks, Trivy, and GitHub CodeQL. CodeQL usage remains subject to GitHub's terms. Final versions and rulesets must pass the qualification process described in the documentation.
-
-## Documentation
-
-Start with the [complete project description](docs/project-description.md) or the [documentation index](docs/README.md).
-
-- [Product scope and naming](docs/product-scope.md)
-- [Scanner evaluation and CodeQL policy](docs/scanner-evaluation.md)
-- [CLI specification](docs/cli-specification.md)
-- [Architecture and scan workflow](docs/architecture.md)
-- [Finding schema and correlation](docs/finding-schema.md)
-- [Reports and AI enrichment](docs/reporting-and-ai.md)
-- [Technology stack and repository layout](docs/implementation-design.md)
-- [MVP and acceptance criteria](docs/mvp.md)
-- [Phased roadmap](docs/roadmap.md)
-- [Threat model and security controls](docs/security-design.md)
-- [AI-assisted implementation guidance](docs/ai-development.md)
-
-## Prerequisites
-
-| Requirement | Setup |
+| What it looks for | Tool |
 | --- | --- |
-| Python 3.10 or newer | Use a current patch release. CodeQL archive extraction requires Python's `tarfile.data_filter`. The local setup was validated with Python 3.12.14. |
-| Python virtual environment | Install RepoBeacon inside a project `.venv` to keep its packages separate from macOS/Homebrew Python. |
-| Homebrew on macOS | Install [Homebrew](https://brew.sh/) and ensure `brew --version` works. RepoBeacon uses it to install missing Semgrep, Gitleaks, and Trivy. |
-| CodeQL platform prerequisites | Supported bundle targets are macOS Intel/Apple Silicon, Linux x64/ARM64 with glibc, and Windows x64. Apple Silicon requires Xcode command-line tools and Rosetta 2. See [CodeQL setup](docs/codeql.md). |
-| Network access and disk space | Initial setup downloads scanners, CodeQL query packs, and Trivy databases. Allow several GiB for downloads, extracted bundles, caches, and temporary analysis databases. CodeQL checks for updates on each enabled scan. |
-| CodeQL usage eligibility | Your use must comply with [GitHub's CodeQL terms](https://docs.github.com/en/code-security/concepts/code-scanning/codeql/codeql-cli). Automatic installation does not grant a license. |
+| Risky code patterns | Semgrep |
+| Accidentally saved passwords, API keys, and other secrets | Gitleaks |
+| Known vulnerabilities in dependencies and insecure configuration | Trivy |
+| Code vulnerabilities using deeper analysis | CodeQL |
 
-RepoBeacon installs or updates the complete CodeQL bundle automatically and stores it in `~/.cache/repobeacon/codeql/`. It does not install Python, Homebrew, Xcode, Rosetta, or project toolchains. On Linux and Windows, install Semgrep, Gitleaks, and Trivy separately and make them available on `PATH`; see the [installation guide](docs/usage.md#requirements-and-installation).
+You don't need to start a server or upload your project to use the default scan. Internet access is needed to download tools, updates, and vulnerability data. AI features are off by default.
 
-For trusted projects that need CodeQL build execution, install the appropriate toolchains and dependencies: Go for Go projects, a JDK and project build tools for Kotlin, Xcode/Swift tools for Swift, or cargo/rustup for Rust. These analyses require `--codeql-allow-builds` because they may execute project build code. See the [language support table](docs/codeql.md#language-detection).
+## Get started on a Mac
 
-## Quick start on macOS
+You need a Mac [supported by Homebrew](https://docs.brew.sh/Installation#macos-requirements), an internet connection, several GB of free disk space, and permission to install software. Setup installs missing prerequisites for you. Apple and Homebrew installers may ask for your Mac password or show prompts; follow those prompts to continue.
 
-Check Homebrew and Xcode command-line tools:
+First, [download RepoBeacon](https://github.com/MaheshCharyC/RepoBeacon/archive/refs/heads/main.zip) and unzip it. Open **Terminal** (press **Command + Space**, type **Terminal**, then press Return). Type `cd ` with a space after it, drag the unzipped RepoBeacon folder into Terminal, and press Return. This tells Terminal which folder to work in.
 
-```sh
-brew --version
-xcode-select -p
-```
+### 1. Set up
 
-If the command-line tools are missing, run `xcode-select --install`. On Apple Silicon, ensure Rosetta 2 is installed as described in the [CodeQL setup guide](docs/codeql.md).
-
-Install Python if needed, then create the environment from the RepoBeacon checkout. Using the Homebrew interpreter explicitly avoids accidentally selecting macOS's older `/usr/bin/python3`:
+Copy this command into Terminal and press Return:
 
 ```sh
-brew install python@3.12
-cd /path/to/RepoBeacon
-"$(brew --prefix python@3.12)/bin/python3.12" -m venv .venv
-source .venv/bin/activate
-python --version
-python -m pip install --upgrade pip
-python -m pip install -e .
-repobeacon scan .
-repobeacon doctor
+bash setup.sh
 ```
 
-The first scan installs missing scanners before analysis. `repobeacon doctor` only verifies local installations; it does not install them. CodeQL is stored outside `.venv` and is discovered by RepoBeacon even if the standalone `codeql` command is not on your shell's `PATH`.
+This single command:
 
-The environment and installed tools persist across terminal and machine restarts. For each new terminal session, activate the existing environment:
+- Checks Apple command-line tools and starts their installer if needed.
+- Installs Homebrew and Python if missing, plus Rosetta 2 on Apple Silicon when needed by CodeQL.
+- Creates a private Python environment (`.venv`) and installs RepoBeacon inside it.
+- Installs missing Semgrep, Gitleaks, and Trivy, gets the latest stable CodeQL bundle, and verifies all four tools.
+
+Wait for **“Setup complete. All four scanners are ready.”** First-time setup can take a while, especially the CodeQL download. You can rerun the same command after a failed setup; installed tools and a working environment are reused. An old or broken environment is backed up before replacement.
+
+### 2. Scan your project
 
 ```sh
-cd /path/to/RepoBeacon
-source .venv/bin/activate
-repobeacon scan /path/to/your-project
+.venv/bin/repobeacon scan "/path/to/your-project"
 ```
 
-You can also run `.venv/bin/repobeacon scan /path/to/your-project` without activating it. You do not need to recreate `.venv` or reinstall RepoBeacon for each scan.
+Replace `/path/to/your-project` with the folder you want to check. Keep the quotes if the path contains spaces. For example:
 
-## Scanner setup and options
+```sh
+.venv/bin/repobeacon scan "$HOME/Projects/MyApp"
+```
 
-`repobeacon scan` includes CodeQL by default, verifies its CLI, extractors, and query packs, and checks GitHub for the latest stable bundle on every run. Missing, broken, or older installations are replaced by a verified bundle in RepoBeacon's user cache. Languages are detected automatically. See [CodeQL setup and language support](docs/codeql.md).
+Tip: you can type `.venv/bin/repobeacon scan ` and drag your project folder into Terminal, then press Return.
 
-On macOS, missing Semgrep, Gitleaks, and Trivy packages are installed through Homebrew. Use `--no-install-tools` to disable installation and CodeQL update checks, or `--scanners semgrep,gitleaks,trivy` to exclude CodeQL. Languages whose CodeQL extraction executes build code require `--codeql-allow-builds` for trusted targets. From a checkout, `python -m repobeacon scan .` also works without installing this package. Missing or failed selected scanners produce exit code 2, never a clean result.
+RepoBeacon detects the code languages automatically. It checks for missing scanners and CodeQL updates before scanning, so the tools stay ready. The first scan may also need to download vulnerability data.
 
-Run the automated tests with `python -m unittest discover -s tests -v`.
+**Your report opens automatically in your default browser when the scan finishes.**
 
-## Development
+## Where to find your results
 
-Follow [CONTRIBUTING.md](CONTRIBUTING.md) for the proposed implementation sequence and validation expectations. See [SECURITY.md](SECURITY.md) for security reporting guidance.
+Terminal prints the full report path. Reports are saved in the folder where you ran the scan:
 
-No open-source license has been selected for this repository. Scanner engines, rule packs, databases, and their distribution terms require separate review.
+```text
+security-report/
+  <date-and-time>/
+    index.html
+```
+
+If you ran the command from the RepoBeacon folder, look inside that folder's **security-report** directory. Open the newest dated folder and double-click **index.html** to view it again. Each scan gets its own folder, so previous reports are kept.
+
+The report includes a visual summary, severity colors, scanner status, and expandable issue details with file locations and suggested fixes. Start with **Critical** and **High** findings. Check the scanner status too: **incomplete** means some checks could not run, even if no issues were found.
+
+You also get a short written summary (`executive-summary.md`), a detailed report (`technical-report.md`), and files for other tools (`findings.json`, `findings.sarif`, `coverage.json`, and `scan-manifest.json`). Keep the whole report folder when sharing it; review it first because it contains project paths and security findings.
+
+## Next time you use it
+
+Open Terminal in the RepoBeacon folder again and run the scan command from step 2. Setup persists after restarting your Mac. You do **not** need to activate the Python environment or run setup before every scan.
+
+To check installations without running a scan:
+
+```sh
+.venv/bin/repobeacon doctor
+```
+
+CodeQL is stored in `~/.cache/repobeacon/codeql/`, outside the Python environment. Use `doctor` to check it; a standalone `codeql` command may not be on your Terminal's search path.
+
+## A few useful options
+
+| What you want to do | Command (run from the RepoBeacon folder) |
+| --- | --- |
+| Scan RepoBeacon itself | `.venv/bin/repobeacon scan .` |
+| Save results to a chosen new folder | `.venv/bin/repobeacon scan "/path/to/project" --output "reports/my-scan"` |
+| Skip opening the browser | `.venv/bin/repobeacon scan "/path/to/project" --no-open` |
+| Skip scanner installation and CodeQL update checks | `.venv/bin/repobeacon scan "/path/to/project" --no-install-tools` |
+| See all options | `.venv/bin/repobeacon scan --help` |
+
+**Swift, Go, Kotlin, and Rust:** CodeQL analysis for these languages can execute project build code. For a project you trust, add `--codeql-allow-builds` to the scan command. Its language tools and dependencies must also be installed (for example, full Xcode for an iOS project). Setup installs the scanners; it does not install every project's build tools. See [language requirements](docs/codeql.md#language-detection).
+
+**Linux or Windows:** the one-command setup script currently supports macOS. Use the [manual installation guide](docs/usage.md#requirements-and-installation) on other systems.
+
+## If something goes wrong
+
+- **Setup stopped:** read the error above it, finish any Apple installer prompts, then run `bash setup.sh` again.
+- **“No such file or directory” for `.venv/bin/repobeacon`:** make sure Terminal is in the RepoBeacon folder and setup has completed.
+- **The browser didn't open:** double-click `index.html` at the report path printed in Terminal.
+- **The scan reports an error:** open the report and check the scanner status. Run `.venv/bin/repobeacon doctor` to check the tools. Rerun setup for missing tools or CodeQL repairs; if another installed scanner fails verification, reinstall that tool with Homebrew.
+- **A command finishes with a nonzero exit code:** `1` means the scan completed and found issues that fail the severity threshold; `2` means the scan was incomplete or couldn't start. Both need attention.
+
+## Coverage and more information
+
+RepoBeacon is an early version (0.1.0). Findings need human review, and a clean report does not guarantee a secure project. The bundled Semgrep checks are a small starter set for Python, JavaScript, and TypeScript. CodeQL supports additional languages; available checks depend on your project's languages and tools. Scans examine current files, not Git history.
+
+CodeQL use is subject to [GitHub's CodeQL terms](https://docs.github.com/en/code-security/how-tos/find-and-fix-code-vulnerabilities/scan-from-the-command-line/set-up-codeql-cli). RepoBeacon has not yet selected an open-source license; each scanner also has its own terms.
+
+- [Detailed usage and advanced options](docs/usage.md)
+- [CodeQL setup and supported languages](docs/codeql.md)
+- [Full documentation and roadmap](docs/README.md)
+- [Contributing](CONTRIBUTING.md) and [reporting a security issue](SECURITY.md)

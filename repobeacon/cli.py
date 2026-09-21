@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import tempfile
+import webbrowser
 
 from . import __version__
 from .adapters import RULES, run_adapter
@@ -18,10 +19,12 @@ def parser():
     root = argparse.ArgumentParser(prog="repobeacon", description="Coordinate local security scanners and generate unified reports.")
     root.add_argument("--version", action="version", version=__version__)
     commands = root.add_subparsers(dest="command", required=True)
+    commands.add_parser("setup", help="Install missing scanners, update CodeQL, and verify all tools.")
     commands.add_parser("doctor", help="Check availability of scanner binaries.")
     scan = commands.add_parser("scan", help="Scan a local directory; CodeQL builds require --codeql-allow-builds.")
     scan.add_argument("target", nargs="?", default=".")
     scan.add_argument("--output", type=Path, help="New output directory; defaults to security-report/<timestamp>.")
+    scan.add_argument("--no-open", action="store_true", help="Do not open the HTML report in a browser (use for CI or headless runs).")
     scan.add_argument("--scanners", default="semgrep,gitleaks,trivy,codeql", help="Comma-separated semgrep,gitleaks,trivy,codeql (all by default).")
     scan.add_argument("--no-install-tools", action="store_true", help="Disable tool installation and CodeQL update checks; verify installed CodeQL locally.")
     scan.add_argument("--profile", choices=["standard", "deep"], default="standard")
@@ -39,6 +42,19 @@ def parser():
     scan.add_argument("--ai-endpoint", help="Endpoint implementing the protocol documented in docs/usage.md.")
     scan.add_argument("--ai-model", default="configured-model")
     return root
+
+
+def setup():
+    print("Installing missing scanners and checking for the latest CodeQL bundle...", flush=True)
+    install_missing_scanners(["semgrep", "gitleaks", "trivy"])
+    ensure_codeql(executable("codeql"), update=True)
+    print("Verifying all scanners...", flush=True)
+    status = doctor()
+    if status == 0:
+        print("Setup complete. All four scanners are ready.")
+    else:
+        print("Setup incomplete. Resolve the verification failures above and run setup again.")
+    return status
 
 
 def doctor():
@@ -185,15 +201,24 @@ def scan(options):
         label = run["scanner"] + ("/" + run["language"] if run.get("language") else "")
         print(f"  {label}: {run['status']}")
     print("Report: " + clean(str(output / "index.html")))
+    if not options.no_open:
+        try:
+            opened = webbrowser.open_new_tab((output / "index.html").as_uri())
+        except (OSError, webbrowser.Error):
+            opened = False
+        if not opened:
+            print("Could not open the default browser. Open the report path above manually.")
     return policy["exit_code"]
 
 
 def main(argv=None):
     options = parser().parse_args(argv)
     try:
+        if options.command == "setup":
+            return setup()
         return doctor() if options.command == "doctor" else scan(options)
     except KeyboardInterrupt:
-        print("Scan cancelled.")
+        print("Operation cancelled.")
         return 130
     except (ScannerError, ValueError, OSError) as error:
         print("RepoBeacon: " + clean(str(error)))

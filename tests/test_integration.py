@@ -23,7 +23,7 @@ class RealCodeQLTests(unittest.TestCase):
             (source / "app.ts").write_text("export function greet(name: string): string { return 'Hello ' + name; }\n")
             output = work / "report"
             with patch("repobeacon.codeql.installation_root", return_value=root):
-                status = main(["scan", str(source), "--scanners", "codeql", "--no-install-tools", "--timeout", "600", "--output", str(output)])
+                status = main(["scan", str(source), "--scanners", "codeql", "--no-open", "--no-install-tools", "--timeout", "600", "--output", str(output)])
             result = json.loads((output / "findings.json").read_text())
             self.assertEqual(status, 0, result["scanner_runs"])
             self.assertEqual({run["language"] for run in result["scanner_runs"]}, {"python", "javascript"})
@@ -36,7 +36,7 @@ class RealScannerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "report"
             with redirect_stdout(io.StringIO()):
-                code = main(["scan", str(Path(__file__).resolve().parents[1] / "testdata/vulnerable"), "--scanners", "semgrep", "--output", str(output)])
+                code = main(["scan", str(Path(__file__).resolve().parents[1] / "testdata/vulnerable"), "--scanners", "semgrep", "--no-open", "--output", str(output)])
             self.assertEqual(code, 1)
             report = json.loads((output / "findings.json").read_text())
             self.assertEqual(len(report["findings"]), 5)
@@ -51,7 +51,7 @@ class RealScannerTests(unittest.TestCase):
             (source / ".env").write_text('api_key = "' + synthetic + '"\n')
             output = root / "report"
             with redirect_stdout(io.StringIO()) as console:
-                code = main(["scan", str(source), "--scanners", "gitleaks", "--output", str(output)])
+                code = main(["scan", str(source), "--scanners", "gitleaks", "--no-open", "--output", str(output)])
             self.assertEqual(code, 1)
             report = json.loads((output / "findings.json").read_text())
             self.assertGreaterEqual(len(report["findings"]), 1)

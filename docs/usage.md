@@ -4,6 +4,10 @@ This guide describes executable behavior. The project description and its extrac
 
 ## Requirements and installation
 
+**Recommended on macOS:** from the RepoBeacon checkout, run `bash setup.sh`, then `.venv/bin/repobeacon scan "/path/to/your-project"`. Setup checks Apple command-line tools, Homebrew, Python, and Rosetta on Apple Silicon, installs missing prerequisites, creates or reuses `.venv`, installs RepoBeacon, and runs `repobeacon setup` to install missing scanners, update CodeQL, and verify all four tools. Apple/Homebrew installation can require interactive prompts. The script backs up an incompatible or broken `.venv` before creating a replacement. Project-specific build tools such as full Xcode, Go, and JDKs remain separate requirements. See the [beginner walkthrough](../README.md#get-started-on-a-mac).
+
+The commands below are the manual installation path for other systems or existing Python environments.
+
 Use Python 3.10 or newer, with current patch updates, on Windows, Linux, or macOS. The orchestrator uses the Python standard library. Scans include CodeQL by default: before scanning, RepoBeacon verifies the CLI, language extractors, and query packs and checks GitHub's latest stable release. It installs or repairs the complete official bundle when needed. See [CodeQL installation and language detection](codeql.md) for cache location, build requirements, platform prerequisites, and applicable terms.
 
 On macOS, each scan also uses Homebrew to install missing selected Semgrep, Gitleaks, and Trivy packages. Install those scanners separately on other platforms. `--no-install-tools` disables installation and CodeQL update checks; installed CodeQL is still verified locally. `doctor` only verifies local installations and never installs or updates them.
@@ -16,13 +20,14 @@ Activate the environment with `.venv\Scripts\Activate.ps1` on Windows PowerShell
 
 ```text
 python -m pip install -e .
+repobeacon setup
 repobeacon scan .
 repobeacon doctor
 ```
 
 On macOS, make sure Homebrew is available on `PATH`; RepoBeacon runs `brew install` only for selected standard scanners that are missing. Obtain Gitleaks and Trivy from the [official Gitleaks releases](https://github.com/gitleaks/gitleaks/releases) and [official Trivy releases](https://github.com/aquasecurity/trivy/releases) when installing manually. Verify the selected release according to your organization's supply-chain policy. Place their executables on PATH or alongside the Python environment's interpreter. Windows binaries use `.exe`. Scanner discovery prefers executables next to the current Python interpreter, then PATH, and also checks the standard Homebrew binary directories on macOS.
 
-For this development checkout, tools were provisioned in `.tools/venv` without changing global installations. Run `.tools/venv/bin/repobeacon` on this Mac after local package installation. This environment and downloaded binaries are ignored by Git and are not part of the source distribution.
+`repobeacon setup` installs missing standard scanners through Homebrew on macOS, installs or updates CodeQL to the latest stable bundle, and verifies every scanner. It exits with code 2 if provisioning or verification fails. On other platforms, install Semgrep, Gitleaks, and Trivy manually before running it. `repobeacon doctor` is the read-only verification alternative. Neither command scans project files or opens a report.
 
 ## Run scans
 
@@ -44,6 +49,8 @@ repobeacon scan ./my-project --cache ./.cache/trivy --no-update
 From the repository root, `python -m repobeacon` supports the same arguments without package installation. Run `repobeacon scan --help` for the authoritative flag list.
 
 Each scan creates a new directory. The default is `security-report/<UTC timestamp>`. Explicit output directories must not already exist. Seven files are written: `index.html`, `executive-summary.md`, `technical-report.md`, `findings.json`, `findings.sarif`, `coverage.json`, and `scan-manifest.json`.
+
+Once all report files are saved, RepoBeacon opens `index.html` in your default browser. Reports with policy failures or incomplete scanner coverage also open so you can inspect the results. Use `repobeacon scan . --no-open` in CI or headless environments to suppress the browser launch. Browser-launch failures print a manual-open message without changing the scan's exit code; startup errors that produce no report do not launch a browser.
 
 The HTML report includes an assessment summary, severity counts and distribution chart, category bars, scanner status cards, and findings grouped by severity. Expand a finding to see remediation, package/advisory information, and scanner provenance. Severity colors are paired with text labels: critical is red, high orange, medium amber, low blue, informational purple, and unknown gray. The responsive report embeds its styles and requires no JavaScript, external fonts, or network access; JSON downloads link to the companion files in the report directory.
 

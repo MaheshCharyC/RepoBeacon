@@ -168,6 +168,11 @@ class LanguageTests(unittest.TestCase):
 
 
 class ScanTests(unittest.TestCase):
+    def setUp(self):
+        browser = patch("repobeacon.cli.webbrowser.open_new_tab", return_value=True)
+        browser.start()
+        self.addCleanup(browser.stop)
+
     def test_codeql_is_enabled_by_default_and_no_eligibility_flag_required(self):
         self.assertIn("codeql", parser().parse_args(["scan"]).scanners.split(","))
 
